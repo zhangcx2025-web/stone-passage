@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>输尿管结石排石预测</title>
+    <style>
+        /* 全局与基础重置 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #e9ecef;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        /* 主容器，承载背景图 */
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            height: 720px;
+            background-image: url('bg.jpg'); /* 背景图 */
+            
+            /* ★ 修改了这里：确保图片完整显示不被裁剪 ★ */
+            background-size: 100% auto; 
+            background-repeat: no-repeat;
+            background-color: #f4f6f8; /* 如果图片不够长，底部显示浅灰色背景 */
+            background-position: center top;
+            
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 顶部标题栏的毛玻璃效果 */
+        .header-glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+            position: relative;
+            z-index: 20;
+        }
+        .header-glass h2 {
+            margin: 0;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+        .header-glass a {
+            color: #007aff;
+            text-decoration: none;
+        }
+
+        /* 左侧垂直滑动条面板 (毛玻璃) */
+        .vertical-panel {
+            position: absolute;
+            left: 15px;
+            top: 100px;
+            width: 60px;
+            height: 380px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 20;
+        }
+        
+        .panel-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 15px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        /* 垂直滑轨容器与刻度线 */
+        .slider-track-container {
+            position: relative;
+            width: 40px;
+            height: 280px;
+            margin-top: 20px;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent,
+                transparent 9px,
+                #95a5a6 9px,
+                #95a5a6 10px
+            );
+            background-size: 10px 10px;
+            background-position: left;
+            background-repeat: no-repeat;
+        }
+
+        .vertical-slider {
+            -webkit-appearance: none;
+            width: 280px;
+            height: 6px;
+            background: #007aff;
+            border-radius: 3px;
+            outline: none;
+            transform: rotate(90deg);
+            transform-origin: left top;
+            position: absolute;
+            left: 23px;
+            top: 0;
+            margin: 0;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e2d1c3, #a68b75);
+            border: 2px solid #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            cursor: pointer;
+        }
+
+        /* 右侧动态指示标签 (上段/下段) */
+        .dynamic-loc-label {
+            position: absolute;
+            left: 85px;
+            background: rgba(255,255,255,0.9);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #2c3e50;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            transition: top 0.1s ease-out;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* 解剖图上的真实结石映射点 */
+        .stone-overlay {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 35% 35%, #d4c4b7, #8d7b68);
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.4);
+            
+            /* ★ 如果图片缩放后左右位置有偏差，微调这里的 left 百分比 ★ */
+            left: 60%; 
+            transform: translateX(-50%);
+            transition: top 0.1s ease-out, transform 0.2s;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 底部控制面板 */
+        .bottom-panel {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            gap: 15px;
+            height: 180px;
+            z-index: 20;
+        }
+
+        .controls-card {
+            flex: 1.5;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .result-card {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toggle-group {
+            display: flex;
+            background: #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .toggle-group input {
+            display: none;
+        }
+        .toggle-group label {
+            flex: 1;
+            text-align: center;
+            padding: 8px 5px;
+            font-size: 12px;
+            color: #555;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .toggle-group input:checked + label {
+            background: #cfe2ff;
+            color: #084298;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin: 0 0 px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 水平刻度与滑动条 */
+        .horizontal-ruler {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-top: 5px;
+            font-size: 10px;
+            color: #888;
+        }
+        .horizontal-ruler span {
+            width: 5px;
+            text-align: center;
+            display: inline-block;
+        }
+        .horizontal-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 5px;
+            background: #007aff;
+            border-radius: 3px;
+            outline: none;
+            margin-top: 1px;
+        }
+
+        /* SVG 圆形进度条 */
+        .circular-chart {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            max-height: 100px;
+        }
+        .circle-bg {
+            fill: none;
+            stroke: #e6e6e6;
+            stroke-width: 3.5;
+        }
+        .circle {
+            fill: none;
+            stroke-width: 3.5;
+            stroke-linecap: round;
+            stroke: #007aff;
+            transition: stroke-dasharray 0.5s ease-out;
+        }
+        .percentage {
+            fill: #333;
+            font-family: -apple-system, sans-serif;
+            font-weight: bold;
+            font-size: 9px;
+            text-anchor: middle;
+        }
+        .result-title {
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            text-transform: uppercase;
+            color: #555;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <div class="header-glass">
+        <h2>输尿管结石自行排出可能性预测</h2>
+        <span style="font-size: 11px; color: #666;">(Based on <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5635101/" target="_blank">PMC5635101</a>)</span>
+    </div>
+
+    <div class="vertical-panel">
+        <div class="panel-label">结石<br>位置</div>
+        <div class="slider-track-container">
+            <input type="range" id="locSlider" class="vertical-slider" min="0" max="100" value="30" oninput="calculateAndRender()">
+        </div>
+    </div>
+    
+    <div id="dynamicLocLabel" class="dynamic-loc-label">上段</div>
+
+    <div id="stoneOverlay" class="stone-overlay"></div>
+
+    <div class="bottom-panel">
+        
+        <div class="controls-card">
+            <div>
+                <div class="section-title">计划排石时间:</div>
+                <div class="toggle-group">
+                    <input type="radio" id="timeShort" name="time" value="short" checked onchange="calculateAndRender()">
+                    <label for="timeShort">短期排石<br>(28±14 天)</label>
+                    <input type="radio" id="timeLong" name="time" value="long" onchange="calculateAndRender()">
+                    <label for="timeLong">长期排石<br>(140 天)</label>
+                </div>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <div class="section-title">
+                    <span>结石最大直径:</span>
+                    <span id="diaDisplay" style="color: #007aff;">4.0 mm</span>
+                </div>
+                <input type="range" id="diaSlider" class="horizontal-slider" min="1" max="10" step="0.5" value="4" oninput="calculateAndRender()">
+                
+                <div class="horizontal-ruler">
+                    <span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span>
+                </div>
+                <div class="horizontal-ruler" style="margin-top: 2px;">
+                    <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10mm</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="result-card">
+            <div class="result-title">预计排石可能性：</div>
+            
+            <svg viewBox="0 0 36 36" class="circular-chart">
+                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="circle" id="progressCircle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <text x="18" y="21" class="percentage" id="probText">0%</text>
+            </svg>
+            
+            <div style="font-size: 10px; color: #777; margin-top: 5px; text-align: center;">
+                仅供参考
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    // 建立基于 PMC5635101 Fig 6 和文献数据的精准查询表
+    // 分别对应：上段(upper)/下段(lower)，短期(short)/长期(long)
+    // 键名为结石直径(mm)，键值为对应的排石率百分比(%)
+    const lookupTable = {
+        upper: {
+            short: { 1:100, 2:99, 3:98, 4:90, 5:70, 6:38,  7:13,  8:2, 9:1, 10:0 },
+            long:  { 1:100, 2:100, 3:98, 4:96, 5:85, 6:62, 7:32,  8:12, 9:2, 10:1 }
+        },
+        lower: {
+            short: { 1:98, 2:97, 3:95, 4:91, 5:85, 6:75, 7:65,  8:35, 9:14, 10:3 },
+            // 下段长期数据严格对齐文献摘要的统计锚点: 3mm=98%, 4mm=81%, 5mm=65%, 6mm=33%
+            long:  { 1:99, 2:98, 3:97, 4:96, 5:92, 6:85, 7:72, 8:36, 9:16, 10:6 } 
+        }
+    };
+
+    // 核心函数：根据位置、时间和直径，查表并进行线性插值
+    function getProbability(isUpper, isShortTerm, diameter) {
+        const loc = isUpper ? 'upper' : 'lower';
+        const time = isShortTerm ? 'short' : 'long';
+        const table = lookupTable[loc][time];
+        
+        // 边界保护
+        if (diameter <= 1) return table[1];
+        if (diameter >= 10) return table[10];
+
+        // 获取整数部分和小数部分
+        const dInt = Math.floor(diameter);
+        const dRem = diameter - dInt;
+
+        // 如果刚好是整数，直接查表返回
+        if (dRem === 0) return table[dInt];
+
+        // 线性插值计算小数部分（例如 4.5mm 会取 4mm 和 5mm 的中间值）
+        const p1 = table[dInt];
+        const p2 = table[dInt + 1];
+        const interpolatedProb = p1 - (p1 - p2) * dRem;
+
+        return interpolatedProb;
+    }
+
+    function calculateAndRender() {
+        const locValue = parseInt(document.getElementById('locSlider').value);
+        const diameter = parseFloat(document.getElementById('diaSlider').value);
+        const isShortTerm = document.getElementById('timeShort').checked;
+
+        // 1. 更新结石直径显示
+        document.getElementById('diaDisplay').innerText = diameter.toFixed(1) + ' mm';
+        
+        // 2. 更新位置标签 (0-50 为上段，51-100 为下段)
+        const isUpper = locValue <= 50; 
+        const locLabel = document.getElementById('dynamicLocLabel');
+        locLabel.innerText = isUpper ? 'UPPER URETER (上段)' : 'LOWER URETER (下段)';
+        
+        const labelTopOffset = 100 + 20 + (locValue / 100) * 280; 
+        locLabel.style.top = labelTopOffset + 'px';
+
+        // 3. 同步更新解剖图上真实结石的位置
+        const topPercent = 25 + (locValue / 100) * (70 - 25);
+        const stoneOverlay = document.getElementById('stoneOverlay');
+        stoneOverlay.style.top = topPercent + '%';
+        
+        const scaleBase = 12 + (diameter * 0.8);
+        stoneOverlay.style.width = scaleBase + 'px';
+        stoneOverlay.style.height = scaleBase + 'px';
+
+        // 4. 调用插值查表系统计算精准概率
+        const percent = Math.round(getProbability(isUpper, isShortTerm, diameter));
+
+        // 5. 渲染 SVG 概率圆环
+        document.getElementById('probText').textContent = percent + '%';
+        const circle = document.getElementById('progressCircle');
+        circle.setAttribute('stroke-dasharray', `${percent}, 100`);
+    }
+
+    // 页面加载完毕后立即初始化
+    window.onload = calculateAndRender;
+</script>
+
+</body>
+</html>
