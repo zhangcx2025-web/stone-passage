@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>输尿管结石排石预测</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #e9ecef;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* 画板高度增加到 780px，为底部面板留出空间 */
+        .app-container {
+            width: 480px;  
+            height: 780px; 
+            background-color: #ffffff; 
+            /* 背景图只占据上半部分的 600px */
+            background-image: url('bg.jpg'); 
+            background-size: 100% 600px; 
+            background-position: top center;
+            background-repeat: no-repeat;
+            
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transform-origin: center center;
+            overflow: hidden;
+        }
+
+        .header-glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+            position: relative;
+            z-index: 20;
+        }
+        
+        .header-glass h2 {
+            margin: 0;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+
+        /* 垂直面板保持原位 */
+        .vertical-panel {
+            position: absolute;
+            left: 15px;
+            top: 75px;
+            width: 60px;
+            height: 310px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 20;
+        }
+        
+        .panel-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 15px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .slider-track-container {
+            position: relative;
+            width: 40px;
+            height: 220px;
+            margin-top: 15px;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent,
+                transparent 9px,
+                #95a5a6 9px,
+                #95a5a6 10px
+            );
+            background-size: 10px 10px;
+            background-position: left;
+            background-repeat: no-repeat;
+        }
+
+        .vertical-slider {
+            -webkit-appearance: none;
+            width: 220px;
+            height: 6px;
+            background: #007aff;
+            border-radius: 3px;
+            outline: none;
+            transform: rotate(90deg);
+            transform-origin: left top;
+            position: absolute;
+            left: 23px;
+            top: 0;
+            margin: 0;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e2d1c3, #a68b75);
+            border: 2px solid #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            cursor: pointer;
+        }
+
+        .dynamic-loc-label {
+            position: absolute;
+            left: 85px;
+            background: rgba(255,255,255,0.9);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #2c3e50;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            transition: top 0.1s ease-out;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .stone-overlay {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 35% 35%, #d4c4b7, #8d7b68);
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.4);
+            left: 60%; 
+            transform: translateX(-50%);
+            transition: top 0.1s ease-out, transform 0.2s;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* ---------------- 新布局区域 ---------------- */
+
+        /* 1. 结果卡片移至左侧标尺正下方 */
+        .result-card {
+            position: absolute;
+            left: 15px;
+            top: 400px; /* 位于高度310px的标尺下方 */
+            width: 60px; /* 与标尺等宽 */
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 10px 0;
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .result-title {
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            color: #333;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+
+        .circular-chart {
+            display: block;
+            margin: 0 auto;
+            width: 45px;
+            height: 45px;
+        }
+        
+        /* 2. 控制面板移至图片最下方（600px之下） */
+        .bottom-controls {
+            position: absolute;
+            top: 600px; /* 紧贴图片底部 */
+            left: 0;
+            width: 480px;
+            height: 180px;
+            box-sizing: border-box;
+            background: #ffffff;
+            padding: 15px 25px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 15px;
+            z-index: 20;
+        }
+
+        /* ------------------------------------------- */
+
+        .toggle-group {
+            display: flex;
+            background: #f4f6f8;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .toggle-group input {
+            display: none;
+        }
+        
+        .toggle-group label {
+            flex: 1;
+            text-align: center;
+            padding: 10px 5px;
+            font-size: 12px;
+            color: #555;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        
+        .toggle-group input:checked + label {
+            background: #cfe2ff;
+            color: #084298;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .horizontal-ruler {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .horizontal-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #007aff;
+            border-radius: 3px;
+            outline: none;
+            margin-top: 5px;
+        }
+
+        .circle-bg {
+            fill: none;
+            stroke: #e6e6e6;
+            stroke-width: 3.5;
+        }
+        
+        .circle {
+            fill: none;
+            stroke-width: 3.5;
+            stroke-linecap: round;
+            stroke: #007aff;
+            transition: stroke-dasharray 0.5s ease-out;
+        }
+        
+        .percentage {
+            fill: #333;
+            font-family: -apple-system, sans-serif;
+            font-weight: bold;
+            font-size: 10px;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header-glass">
+        <h2>输尿管结石自行排出可能性预测</h2>
+    </div>
+
+    <!-- 左侧位置滑块 -->
+    <div class="vertical-panel">
+        <div class="panel-label">结石<br>位置</div>
+        <div class="slider-track-container">
+            <input type="range" id="locSlider" class="vertical-slider" min="0" max="100" value="30" oninput="calculateAndRender()">
+        </div>
+    </div>
+    
+    <div id="dynamicLocLabel" class="dynamic-loc-label">上段</div>
+    <div id="stoneOverlay" class="stone-overlay"></div>
+
+    <!-- 移至左下方的结果卡片 -->
+    <div class="result-card">
+        <div class="result-title">排石<br>概率</div>
+        <svg viewBox="0 0 36 36" class="circular-chart">
+            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="circle" id="progressCircle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <text x="18" y="21.5" class="percentage" id="probText">0%</text>
+        </svg>
+        <div style="font-size: 9px; color: #999; margin-top: 4px;">仅供参考</div>
+    </div>
+
+    <!-- 移至底部的控制面板 -->
+    <div class="bottom-controls">
+        <div>
+            <div class="section-title">计划排石时间:</div>
+            <div class="toggle-group">
+                <input type="radio" id="timeShort" name="time" value="short" checked onchange="calculateAndRender()">
+                <label for="timeShort">短期排石 (28±14 天)</label>
+                <input type="radio" id="timeLong" name="time" value="long" onchange="calculateAndRender()">
+                <label for="timeLong">长期排石 (140 天)</label>
+            </div>
+        </div>
+
+        <div style="margin-top: 5px;">
+            <div class="section-title">
+                <span>结石最大直径:</span>
+                <span id="diaDisplay" style="color: #007aff; font-size: 16px;">4.0 mm</span>
+            </div>
+            <input type="range" id="diaSlider" class="horizontal-slider" min="1" max="10" step="0.5" value="4" oninput="calculateAndRender()">
+            
+            <div class="horizontal-ruler">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10mm</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function resizeApp() {
+        const container = document.querySelector('.app-container');
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        
+        // 适配新高度 780px
+        const scaleW = screenWidth / 480;
+        const scaleH = screenHeight / 780;
+        
+        let scale = Math.min(scaleW, scaleH, 1);
+        if (scale < 1) {
+            scale = scale * 0.95; 
+        }
+        container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeApp);
+
+    const lookupTable = {
+        upper: {
+            short: { 1:100, 2:99, 3:98, 4:90, 5:70, 6:38,  7:13,  8:2, 9:1, 10:0 },
+            long:  { 1:100, 2:100, 3:98, 4:96, 5:85, 6:62, 7:32,  8:12, 9:2, 10:1 }
+        },
+        lower: {
+            short: { 1:98, 2:97, 3:95, 4:91, 5:85, 6:75, 7:65,  8:35, 9:14, 10:3 },
+            long:  { 1:99, 2:98, 3:97, 4:96, 5:92, 6:85, 7:72, 8:36, 9:16, 10:6 } 
+        }
+    };
+
+    function getProbability(isUpper, isShortTerm, diameter) {
+        const loc = isUpper ? 'upper' : 'lower';
+        const time = isShortTerm ? 'short' : 'long';
+        const table = lookupTable[loc][time];
+        
+        if (diameter <= 1) return table[1];
+        if (diameter >= 10) return table[10];
+
+        const dInt = Math.floor(diameter);
+        const dRem = diameter - dInt;
+
+        if (dRem === 0) return table[dInt];
+
+        const p1 = table[dInt];
+        const p2 = table[dInt + 1];
+        return p1 - (p1 - p2) * dRem;
+    }
+
+    function calculateAndRender() {
+        const locValue = parseInt(document.getElementById('locSlider').value);
+        const diameter = parseFloat(document.getElementById('diaSlider').value);
+        const isShortTerm = document.getElementById('timeShort').checked;
+
+        document.getElementById('diaDisplay').innerText = diameter.toFixed(1) + ' mm';
+        
+        const isUpper = locValue <= 50; 
+        const locLabel = document.getElementById('dynamicLocLabel');
+        locLabel.innerText = isUpper ? '上段' : '下段';
+        
+        const labelTopOffset = 75 + 15 + (locValue / 100) * 220; 
+        locLabel.style.top = labelTopOffset + 'px';
+
+        // 将百分比坐标转换为针对 600px 图片绝对像素的坐标，防止因画板变长而错位
+        // 26% of 600px = 156px; 82% of 600px = 492px
+        const stoneTopPx = 156 + (locValue / 100) * (492 - 156);
+        const stoneOverlay = document.getElementById('stoneOverlay');
+        stoneOverlay.style.top = stoneTopPx + 'px';
+        
+        const scaleBase = 12 + (diameter * 0.8);
+        stoneOverlay.style.width = scaleBase + 'px';
+        stoneOverlay.style.height = scaleBase + 'px';
+
+        const percent = Math.round(getProbability(isUpper, isShortTerm, diameter));
+
+        document.getElementById('probText').textContent = percent + '%';
+        const circle = document.getElementById('progressCircle');
+        circle.setAttribute('stroke-dasharray', `${percent}, 100`);
+    }
+
+    window.onload = function() {
+        resizeApp();
+        calculateAndRender();
+    };
+</script>
+
+</body>
+</html>
